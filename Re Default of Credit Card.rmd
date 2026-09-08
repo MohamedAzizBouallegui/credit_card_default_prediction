@@ -1,0 +1,169 @@
+---
+title: "Atelier Statistiques 1ère année - Encadré par Mr. Samer Azzabi"
+output: html_notebook
+---
+
+# Intitulé du sujet
+Analyse de transactions de cartes de crédit pour une détection précoce des défauts.
+
+# Descriptif du sujet
+Cette étude se concentre sur I’analyse approfondie du comportement des détenteurs de cartes de crédit dans
+le but de détecter précocement les signes potentiels de défaut de paiement. En examinant les habitudes de
+dépenses, les modèles de remboursement, et d’autres comportements financiers, I’objectif est d’identifier des
+indicateurs prédictifs permettant d’évaluer le risque de défaut. L’objectif de cette recherche est de faciliter
+une approche proactive dans la gestion des défauts de paiement, offrant ainsi aux institutions financières des
+solutions plus précises et rapides pour évaluer et atténuer les risques inhérents aux transactions par cartes
+de crédit.
+
+# Travail à réaliser
+• Pré-traitement des données (Valeurs atypiques, valeurs manquantes, analyse de la qualité des données)
+• L’analyse exploratoire des données (Analyse univariée, bivariée, Visualisation des données,. ..)
+• Transformation des variables normalisation, discrétisation, . . . )
+• Analyse de corrélation, analyse de variance, test d’Indépendance
+• Tableau de bord (dashboard) avec Rshiny.
+
+# Informations sur La Dataset:
+Le dataset utilisée est "Default of Credit Card Clients Dataset" de UCI ML sur Kaggle. Ce Dataset contient des informations sur les paiements par défaut, les facteurs démographiques, les données de crédit, l’historique des paiements et les relevés de factures des clients de cartes de crédit à Taiwan d’avril 2005 à septembre 2005.
+
+```{r}
+#Importation des Librairies
+library(ggplot2)
+library(moments)
+```
+
+```{r}
+# Lecture des données
+données <- read.csv("Downloads/UCI_Credit_Card.csv")
+head(données)
+```
+# Contenu
+• ID: ID de chaque client
+• LIMIT_BAL: Montant du crédit accordé en dollars NT (comprend le crédit individuel et famil-
+ial/supplémentaire)
+• SEX: Gendre (1=male, 2=femelle)
+• EDUCATION: (1=graduate school, 2=university, 3=high school, 4=others, 5=unknown, 6=unknown)
+• AGE: Age en années
+• PAY_0: Statut de remboursement en septembre 2005 (-1=payer dûment, 1=retard de paiement d’un
+mois, 2=retard de paiement de deux mois, . . . 8=retard de paiement de huit mois, 9=retard de
+paiement de neuf mois et plus)
+• PAY_2: Statut de remboursement en août 2005 (échelle identique à celle ci-dessus)
+• PAY_3: Statut de remboursement en Juillet 2005 (échelle identique à celle ci-dessus)
+2
+• PAY_4: Statut de remboursement en Juin 2005 (échelle identique à celle ci-dessus)
+• PAY_5: Statut de remboursement en May 2005 (échelle identique à celle ci-dessus)
+• PAY_6: Statut de remboursement en Avril 2005 (échelle identique à celle ci-dessus)
+• BILL_AMT1: Montant du relevé de facture en septembre 2005 (dollar NT)
+• BILL_AMT2: Montant du relevé de facture en août 2005 (dollar NT)
+• BILL_AMT3: Montant du relevé de facture en Juillet 2005 (dollar NT)
+• BILL_AMT4: Montant du relevé de facture en Juin 2005 (dollar NT)
+• BILL_AMT5: Montant du relevé de facture en May 2005 (dollar NT)
+• BILL_AMT6: Montant du relevé de facture en Avril 2005 (dollar NT)
+• PAY_AMT1: Montant du paiement précédent en septembre 2005 (NT dollar)
+• PAY_AMT2: Montant du paiement précédent en août 2005 (NT dollar)
+• PAY_AMT3: Montant du paiement précédent en Juillet 2005 (NT dollar)
+• PAY_AMT4: Montant du paiement précédent en Juin 2005 (NT dollar)
+• PAY_AMT5: Montant du paiement précédent en May 2005 (NT dollar)
+• PAY_AMT6: Montant du paiement précédent en Avril 2005 (NT dollar)
+• default.payment.next.month: Default payment (1=yes, 0=no)
+
+# Structural check
+```{r}
+# Shape
+print(paste("Shape:", paste(dim(données), collapse = " x ")))
+
+# Data types
+print("Data Types:")
+sapply(données, class)
+
+# Memory
+print(paste("Data usage:", format(object.size(données), units = "MB"), collapse = "x"))
+```
+```{r}
+# Total valeurs manquantes dans le dataset entièr.
+sum(is.na(données))
+```
+Il parait que ce dataset ne contient donc aucune valeur manquante. Passons à l'analyse des valeurs dupliquées.
+```{r}
+#Vérification s'il y a des lignes dupliquées.
+any(duplicated(données))
+```
+Il parait aussi qu'il n'y a aucune valeur dupliquée.
+
+
+# Definition des types de variables
+
+```{r}
+données <- subset(données, select = -ID) #Puisque ID n'est qu'un identifiant
+factor_vars <- c("SEX", "EDUCATION", "MARRIAGE", "PAY_0", "PAY_2", "PAY_3", "PAY_4",
+                "PAY_5", "PAY_6")
+quant_vars <- c("LIMIT_BAL", "AGE", "BILL_AMT1", "BILL_AMT2", "BILL_AMT3",
+                "BILL_AMT4", "BILL_AMT5", "BILL_AMT6")
+données[factor_vars] <- lapply(données[factor_vars], function(x) as.factor(x))
+données$default.payment.next.month <- factor(
+  données$default.payment.next.month,
+  levels = c(0, 1),
+  labels = c("Non-Defaut", "Defaut")
+)
+target <-"default.payment.next.month"
+```
+
+# Analyse univariée
+```{r}
+# Analysons d'abord LIMIT_BAL:
+ggplot(données, aes(x = LIMIT_BAL)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 100000) +
+  geom_density() +
+  theme_classic()
+```
+```{r}
+ggplot(données, aes(x = LIMIT_BAL)) +
+  geom_boxplot() +
+  theme_classic()
+```
+On remarque qu'il y a une claire asymétrie
+```{r}
+print(paste("Coefficient d'Asymétrie:", skewness(données$LIMIT_BAL, na.rm = TRUE), collapse = "x"))
+```
+Ce coefficient d'Asymétrie confirme nos suspécions.
+```{r}
+skewness_values = sapply(données[, quant_vars], skewness, na.rm = TRUE)
+skewness_df <- data.frame(
+  Variable = quant_vars,
+  Skewness = skewness_values,
+  Interpretation = ifelse(abs(skewness_values) < 0.5, "Symmetric",
+                   ifelse(abs(skewness_values) < 1, "Moderately Skewed", "Highy Skewed"))
+)
+skewness_df
+```
+
+```{r}
+# Commencons par les histogrammes
+for (var in quant_vars) {
+  p <- ggplot(données, aes(x = .data[[var]])) +
+    geom_histogram(aes(y = after_stat(density))) +
+    geom_density() +
+    theme_dark()
+  print(p)
+}
+```
+
+#Vérification de l'équilibre des données
+```{r}
+ggplot(données, aes(default.payment.next.month)) +
+  geom_bar(aes(y = after_stat(count / sum(count) * 100), fill = default.payment.next.month)) +
+  scale_fill_manual(values = c("Non-Defaut" = "green", "Defaut" = "red")) +
+  labs(y = "Percentage (%)", x = "Payment Defaut Status") +
+  guides(fill = "none")  # Remove legend if you don't need it
+```
+```{r}
+percent <- prop.table(table(données$default.payment.next.month)) * 100
+percent
+```
+On remarque que 22.12% des clients sont en défaut, puisque c'est supérieur à 5%, on peut dire que les données sont équilibrés.
+
+
+
+
+
+
+
