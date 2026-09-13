@@ -100,6 +100,45 @@ target <-"default.payment.next.month"
 ```
 
 # Univariate Analysis
+```{r}
+# Function to detect outliers using IQR
+detect_outliers_iqr <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE)
+  Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  return(x < lower_bound | x > upper_bound)
+}
+```
+Let's take a look at our variables one by one.
+```{r}
+ggplot(data, aes(x = LIMIT_BAL)) +
+    geom_histogram(aes(y = after_stat(density)), 
+                   bins = 30, fill = "steelblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    labs(title = "LIMIT_BAL", x = NULL, y = NULL) +
+    theme_minimal()
+```
+We notice a positive skewness: most clients have credit limits below 500000NTD, while very few have higher credit limits.
+```{r}
+LIMIT_BAL_skewness = skewness(data$LIMIT_BAL)
+round(LIMIT_BAL_skewness, digits = 3)
+```
+The skewness value is 0.993 which exists in the interval [0.5, 1], this confirms that the data is moderately positively skewed.
+```{r}
+ggplot(data, aes(x = LIMIT_BAL)) +
+    geom_boxplot() +
+    theme_classic()
+```
+Notice the individuals we mentioned earlier as the few who have a credit limit of over 500000NTD are what consists our outliers in the case of LIMIT_BAL. Let's take a closer look at these outliers:
+```{r}
+outliers = detect_outliers_iqr(data$LIMIT_BAL)
+print(paste("Outlier count:", sum(outliers)))
+print(paste("Outlier percentage:", sum(outliers)/nrow(data) * 100))
+```
+So only 0.5% of the population has a credit limit of over 500000NTD, which is a healthy percentage of outliers.
+
 ```{r, fig.width=14, fig.height=15}
 # Create a list of plots
 plots <- lapply(quant_vars, function(var) {
@@ -124,11 +163,8 @@ plots <- lapply(quant_vars, function(var){
 })
 wrap_plots(plots, ncol = 2)
 ```
-We can see a clear asymmetry, and quite a few outliers.
-```{r}
-print(paste("Skewness coefficient:", skewness(data$LIMIT_BAL, na.rm = TRUE), collapse = "x"))
-```
-With a skewness coefficient that large, we can safely conclude that the LIMIT_BAL data is negatively skewed.
+We can see a clear asymmetry, and quite a few outliers across the board.
+
 ```{r}
 skewness_values = sapply(data[, quant_vars], skewness, na.rm = TRUE)
 skewness_df <- data.frame(
@@ -139,6 +175,7 @@ skewness_df <- data.frame(
 )
 skewness_df
 ```
+With this we can safely assume the data is negatively skewed across all quantitative variables.
 ```{r}
 # Bar plot of skewness values
 ggplot(skewness_df, aes(x = reorder(Variable, Skewness), y = Skewness, fill = Skewness > 0)) +
@@ -153,16 +190,6 @@ ggplot(skewness_df, aes(x = reorder(Variable, Skewness), y = Skewness, fill = Sk
                     name = "Direction")
 ```
 ```{r}
-# Function to detect outliers using IQR
-detect_outliers_iqr <- function(x) {
-  Q1 <- quantile(x, 0.25, na.rm = TRUE)
-  Q3 <- quantile(x, 0.75, na.rm = TRUE)
-  IQR <- Q3 - Q1
-  lower_bound <- Q1 - 1.5 * IQR
-  upper_bound <- Q3 + 1.5 * IQR
-  return(x < lower_bound | x > upper_bound)
-}
-
 # Detect outliers for all quantitative variables
 outliers_list <- lapply(data[, quant_vars], detect_outliers_iqr)
 
@@ -177,7 +204,7 @@ outlier_summary <- data.frame(
 )
 print(outlier_summary)
 ```
-
+The percentages of outliers for LIMIT_BAL and AGE are healthy. As for the outlier percentages for BILL_AMT1 through BILL_AMT6, the values are concerning. Let's analyse the results
 ```{r}
 # Commencons par les histogrammes
 for (var in quant_vars) {
