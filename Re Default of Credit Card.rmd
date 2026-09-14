@@ -25,6 +25,7 @@ The dataset used is the "Default of Credit Card Clients Dataset" from UCI ML on 
 library(ggplot2)
 library(moments)
 library(patchwork)
+library(MASS)
 ```
 
 ```{r}
@@ -111,7 +112,7 @@ detect_outliers_iqr <- function(x) {
   return(x < lower_bound | x > upper_bound)
 }
 ```
-Let's take a look at our variables one by one.
+Let's take a look at our variables one by one. LIMIT_BAL is the amount of credit granted in NT dollars.
 ```{r}
 ggplot(data, aes(x = LIMIT_BAL)) +
     geom_histogram(aes(y = after_stat(density)), 
@@ -120,7 +121,15 @@ ggplot(data, aes(x = LIMIT_BAL)) +
     labs(title = "LIMIT_BAL", x = NULL, y = NULL) +
     theme_minimal()
 ```
-We notice a positive skewness: most clients have credit limits below 500000NTD, while very few have higher credit limits.
+We notice a positive skewness: most clients have credit limits below 500000NTD, while very few have higher credit limits. There are several possible reasons:
+  •Higher-income or financially stronger customers may qualify for much larger credit limits.
+  •Customers with a long history of responsible repayment may gradually receive higher limits.
+  •Businesses, premium customers, or high-value customers may naturally receive much larger limits than ordinary customers.
+  •Customers who consistently spend a lot may be given higher limits to accommodate their usage.
+  •Lenders may assign limits based on perceived probability of default. Low-risk customers can    receive substantially higher limits.
+  •Long-standing customers may have earned increased limits over time.
+  •A few extremely high values could represent corporate accounts, negotiated limits, or exceptional approvals.
+  •The large values could also be data-entry errors or genuine statistical outliers.
 ```{r}
 LIMIT_BAL_skewness = skewness(data$LIMIT_BAL)
 round(LIMIT_BAL_skewness, digits = 3)
@@ -139,6 +148,58 @@ print(paste("Outlier percentage:", sum(outliers)/nrow(data) * 100))
 ```
 So only 0.5% of the population has a credit limit of over 500000NTD, which is a healthy percentage of outliers.
 
+In general, the data is not suited for modeling, let's try transforming it and seeing if that changes anything
+```{r}
+ggplot(data, aes(x = sqrt(LIMIT_BAL))) +
+    geom_histogram(aes(y = after_stat(density)), 
+                   bins = 30, fill = "steelblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    labs(title = "Square root of LIMIT_BAL", x = NULL, y = NULL) +
+    theme_minimal()
+```
+```{r}
+ggplot(data, aes(x = log(LIMIT_BAL))) +
+    geom_histogram(aes(y = after_stat(density)), 
+                   bins = 30, fill = "steelblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    labs(title = "log of LIMIT_BAL", x = NULL, y = NULL) +
+    theme_minimal()
+```
+# Box-Cox transformation
+```{r}
+bc <- boxcox(LIMIT_BAL ~ 1, data = data)
+
+# Optimal lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+```
+```{r}
+if (abs(lambda) < 0.01) {
+  data$LIMIT_BAL_boxcox <- log(data$LIMIT_BAL)
+} else {
+  data$LIMIT_BAL_boxcox <- (data$LIMIT_BAL^lambda - 1) / lambda
+}
+```
+
+```{r}
+ggplot(data, aes(x = LIMIT_BAL_boxcox)) +
+    geom_histogram(aes(y = after_stat(density)), 
+                   bins = 30, fill = "steelblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    labs(title = "Box-Cox LIMIT_BAL", x = NULL, y = NULL) +
+    theme_minimal()
+```
+
+Let's now look at the AGE variable
+```{r}
+ggplot(data, aes(x = AGE)) +
+    geom_histogram(aes(y = after_stat(density)), 
+                   bins = 30, fill = "steelblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    labs(title = "AGE", x = NULL, y = NULL) +
+    theme_minimal()
+```
+This variable is also asymmitric. The number of clients between the ages of 20 and 40 are much larger than the people aged 40 and above. 
 ```{r, fig.width=14, fig.height=15}
 # Create a list of plots
 plots <- lapply(quant_vars, function(var) {
