@@ -26,6 +26,8 @@ library(ggplot2)
 library(moments)
 library(patchwork)
 library(MASS)
+library(DescTools)
+library(bestNormalize)
 ```
 
 ```{r}
@@ -149,29 +151,15 @@ print(paste("Outlier percentage:", sum(outliers)/nrow(data) * 100))
 So only 0.5% of the population has a credit limit of over 500000NTD, which is a healthy percentage of outliers.
 
 In general, the data is not suited for modeling, let's try transforming it and seeing if that changes anything
-```{r}
-ggplot(data, aes(x = sqrt(LIMIT_BAL))) +
-    geom_histogram(aes(y = after_stat(density)), 
-                   bins = 30, fill = "steelblue", alpha = 0.7) +
-    geom_density(color = "red", linewidth = 1) +
-    labs(title = "Square root of LIMIT_BAL", x = NULL, y = NULL) +
-    theme_minimal()
-```
-```{r}
-ggplot(data, aes(x = log(LIMIT_BAL))) +
-    geom_histogram(aes(y = after_stat(density)), 
-                   bins = 30, fill = "steelblue", alpha = 0.7) +
-    geom_density(color = "red", linewidth = 1) +
-    labs(title = "log of LIMIT_BAL", x = NULL, y = NULL) +
-    theme_minimal()
-```
+
 # Box-Cox transformation
 ```{r}
-bc <- boxcox(LIMIT_BAL ~ 1, data = data)
+bc <- boxcox(data$LIMIT_BAL)
 
 # Optimal lambda
-lambda <- bc$x[which.max(bc$y)]
+lambda <- bc$lambda
 lambda
+
 ```
 ```{r}
 if (abs(lambda) < 0.01) {
@@ -199,7 +187,13 @@ ggplot(data, aes(x = AGE)) +
     labs(title = "AGE", x = NULL, y = NULL) +
     theme_minimal()
 ```
-This variable is also asymmitric. The number of clients between the ages of 20 and 40 are much larger than the people aged 40 and above. 
+We notice that the majority of the customer base is young (around 25-30), and this is normal, since in general, young people are the one actively using credit. There are also few older customers aged between 55 and 79, and these are legitimate older customers, not outliers
+```{r}
+ggplot(data, aes(x = AGE)) +
+    geom_boxplot() +
+    theme_classic()
+```
+The boxplot for AGE shows a right-skewed distribution, with the median age sitting around 34 years. The middle 50% of customers (the box) are concentrated between approximately 28 and 41 years old, with the bulk of the customer base being relatively young. The right tail extends toward older ages, and the cluster of individual points beyond 60 indicates that older customers (roughly 60 to 80 years old) are statistical outliers. However, these are legitimate older policyholders rather than data errors as pointed earlier, reflecting the rarity of elderly customers in this credit card dataset.
 ```{r, fig.width=14, fig.height=15}
 # Create a list of plots
 plots <- lapply(quant_vars, function(var) {
